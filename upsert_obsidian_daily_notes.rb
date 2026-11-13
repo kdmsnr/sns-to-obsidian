@@ -10,19 +10,23 @@ module UpsertObsidianDailyNotes
   def main(argv = ARGV)
     options = { config: DEFAULT_CONFIG_PATH, source: "all" }
     parser = OptionParser.new do |opts|
-      opts.banner = "Usage: ruby upsert_obsidian_daily_notes.rb [--config PATH] [--days N] [--source all|bsky|x]"
+      opts.banner = "Usage: ruby upsert_obsidian_daily_notes.rb [--config PATH] [--days N | --all] [--source all|bsky|x]"
       opts.on("--config PATH", "Config file, default: #{DEFAULT_CONFIG_PATH}") { |value| options[:config] = value }
       opts.on("--days N", Integer, "Sync the last N calendar days, including today") do |value|
         raise OptionParser::InvalidArgument, "--days must be a positive integer" unless value.positive?
 
         options[:days] = value
       end
+      opts.on("--all", "Write all dates, overriding obsidian.posts.days") { options[:all] = true }
       opts.on("--source SOURCE", %w[all bsky x], "Source to write, default: all") { |value| options[:source] = value }
     end
     parser.parse!(argv)
     raise ArgumentError, "unexpected arguments: #{argv.join(' ')}" unless argv.empty?
 
+    raise ArgumentError, "--all and --days cannot be combined" if options[:all] && options[:days]
+
     config = load_config(options[:config])
+    config["obsidian"]["posts"].delete("days") if options[:all] && config.dig("obsidian", "posts").is_a?(Hash)
     sources = options[:source] == "all" ? ObsidianNotes::LABELS.keys : [options[:source].to_sym]
     updated = ObsidianNotes.write_archives(config, sources: sources, days: options[:days])
     puts "daily notes updated: #{updated}"

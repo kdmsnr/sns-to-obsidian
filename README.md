@@ -1,6 +1,6 @@
 # bsky-to-obsidian
 
-Bluesky の公開 API と X の RSS から自分の投稿を取り出し、Obsidian の Daily note に書き込むためのスクリプトです。
+Bluesky の公開 API、X の RSS と公式アーカイブから自分の投稿を取り出し、Obsidian の Daily note に書き込むためのスクリプトです。
 Bluesky の過去分は初回に CAR ファイルから取り込み、以後は API で最新分を取得します。
 Bluesky と X は別々のスクリプトで実行し、同じ Daily note 内の専用ブロックをそれぞれ更新します。
 
@@ -135,9 +135,49 @@ bundle exec ruby x_to_obsidian.rb --feed-file path/to/feed.xml
 
 `--days N` を併用できます。
 
+### X の公式アーカイブ
+
+公式アーカイブの取り込みには `x_archive_to_obsidian.rb` を使います。
+X からダウンロードした ZIP ファイルを指定してください。
+`x.handle` はアーカイブのアカウントに合わせて設定してください。
+
+```sh
+bundle exec ruby x_archive_to_obsidian.rb path/to/archive.zip
+```
+
+ZIP ファイルが1個入ったディレクトリも指定できます。
+
+```sh
+bundle exec ruby x_archive_to_obsidian.rb path/to/downloads
+```
+
+展開済みのアーカイブを使う場合は、そのディレクトリを指定します。
+
+```sh
+bundle exec ruby x_archive_to_obsidian.rb path/to/unpacked-archive
+```
+
+投稿データのファイルを直接指定することもできます。
+
+```sh
+bundle exec ruby x_archive_to_obsidian.rb path/to/unpacked-archive/data/tweets.js
+```
+
+投稿は RSS から取得した履歴と投稿 ID でマージし、Daily note に反映します。
+`obsidian.posts.days` または `--days N` を設定した場合もアーカイブの全投稿を履歴に保存し、指定した期間だけ Daily note に反映します。
+`--config PATH` で設定ファイルを指定できます。
+設定の日数を無視して全期間を反映するには `--all` を指定します。`--days N` と `--all` は併用できません。
+
+```sh
+bundle exec ruby x_archive_to_obsidian.rb --all path/to/archive.zip
+```
+
+返信は取り込み、リポストは除外します。本文中の短縮 URL は取得できる範囲で展開します。
+画像や動画のファイルは取り込みません。ZIP の読み込みには `unzip` コマンドが必要です。
+
 ### `x.archive_dir`
 
-取得した RSS と投稿履歴の保存先です。
+取得した RSS と、RSS および公式アーカイブから取り込んだ投稿履歴の保存先です。
 デフォルトは `x-archive` で、Bluesky の抽出先とは独立しています。
 投稿は `posts.jsonl` に投稿 ID ごとに蓄積し、再取得した投稿は最新の内容で更新します。
 RSS の原本は `feeds/latest.xml` に上書きし、直近の1件だけ残します。
@@ -189,7 +229,7 @@ obsidian:
 
 対象期間外の Daily note は変更しません。
 取得と履歴保存の範囲は制限しません。
-Bluesky の通常実行では保存済みの投稿に追いつくまで API を取得し、CAR の取り込みと X の RSS 履歴保存では入力全件を対象にします。
+Bluesky の通常実行では保存済みの投稿に追いつくまで API を取得し、CAR の取り込みと X の RSS・公式アーカイブの履歴保存では入力全件を対象にします。
 コマンドラインの `--days N` を指定した場合は、設定ファイルの値より優先します。
 
 ## 使い方
@@ -222,6 +262,7 @@ bundle exec ruby upsert_obsidian_daily_notes.rb
 
 投稿の再取得は行わず、履歴ファイルがないサービスはスキップします。
 `--config PATH` と `--days N` を指定できます。
+`--all` を指定すると、設定にかかわらず全期間を反映します。
 反映日数を省略した場合は、設定ファイルの `obsidian.posts.days` に従います。
 
 Daily note は保存済みの投稿履歴から日付ごとに生成し、管理ブロック内を時刻順に並べます。

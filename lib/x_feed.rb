@@ -108,7 +108,10 @@ module XFeed
   end
 
   def archive(xml, directory)
-    incoming = parse(xml)
+    merge_posts(parse(xml), directory, xml: xml)
+  end
+
+  def merge_posts(incoming, directory, xml: nil)
     FileUtils.mkdir_p(directory)
 
     File.open(File.join(directory, ".lock"), "a") do |lock|
@@ -135,7 +138,7 @@ module XFeed
       atomic_write(path) do |file|
         posts.each { |post| file.puts(JSON.generate(post)) }
       end
-      atomic_write(File.join(snapshots, "latest.xml")) { |file| file.write(xml) }
+      atomic_write(File.join(snapshots, "latest.xml")) { |file| file.write(xml) } if xml
       legacy_snapshots.each { |snapshot| File.delete(snapshot) }
 
       posts
