@@ -35,7 +35,7 @@ Dir.mktmpdir("obsidian-notes-test") do |directory|
   }
   x = { "id" => "1", "author" => "self", "created_at" => timestamp, "text" => "X 本文", "url" => "https://x.com/self/status/1" }
   config = {
-    "extract" => { "out_dir" => File.dirname(bsky_path) },
+    "bluesky" => { "out_dir" => File.dirname(bsky_path) },
     "x" => { "handle" => "self", "archive_dir" => File.dirname(x_path) },
     "obsidian" => { "vault_path" => vault, "timezone" => "Asia/Tokyo",
                     "daily" => { "path_format" => "Daily/%Y/%m/%Y-%m-%d.md" } }

@@ -122,7 +122,7 @@ module ObsidianNotes
     sources.each_with_object({}) do |source, posts|
       case source
       when :bsky
-        directory = config_get(config, "extract", "out_dir", default: "out")
+        directory = config_get(config, "bluesky", "out_dir", default: "out")
         path = %w[posts.jsonl records.jsonl].map { |name| File.join(directory, name) }.find { |candidate| File.file?(candidate) }
         posts[source] = read_bsky_posts(path) if path
       when :x

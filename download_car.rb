@@ -33,7 +33,7 @@ def parse_options
   config = load_config(options.config_path)
 
   options.handle = bluesky_actor_config(config)
-  options.car_path = config_get(config, "extract", "car_path", default: "repo.car")
+  options.car_path = config_get(config, "bluesky", "car_path", default: "repo.car")
 
   options
 end

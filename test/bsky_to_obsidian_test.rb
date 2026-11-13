@@ -3,6 +3,8 @@
 
 require "cbor"
 require "digest"
+require "open3"
+require "rbconfig"
 require "stringio"
 require "tmpdir"
 
@@ -134,8 +136,7 @@ Dir.mktmpdir("bsky-to-obsidian-test") do |directory|
   vault = File.join(directory, "vault")
   FileUtils.mkdir_p([out, vault])
   config = {
-    "bluesky" => { "handle" => "self.example" },
-    "extract" => { "out_dir" => out, "car_path" => File.join(directory, "missing.car") },
+    "bluesky" => { "handle" => "self.example", "out_dir" => out, "car_path" => File.join(directory, "missing.car") },
     "obsidian" => { "vault_path" => vault, "timezone" => "Asia/Tokyo", "daily" => { "path_format" => "%Y-%m-%d.md" },
                     "posts" => { "exclude_texts" => ["excluded"] } }
   }
@@ -195,7 +196,7 @@ Dir.mktmpdir("bsky-to-obsidian-test") do |directory|
   assert_equal(note, File.read(note_path), "offline replay rebuilds notes after an interrupted write")
 
   assert_raises("mixing accounts in one archive must fail") { BskyFeed.read_posts(archive, OTHER_DID) }
-  assert_raises("offline refresh is ambiguous") { BskyToObsidian.parse_options(["--offline", "--refresh-car"]) }
+  assert_raises("CAR refresh is not part of the API command") { BskyToObsidian.parse_options(["--refresh-car"]) }
 end
 
 # Generate a minimal CAR so initial extraction is exercised without user data.
@@ -208,7 +209,7 @@ def varint(number)
   (bytes << number).pack("C*")
 end
 
-def write_car(path, record)
+def write_car(path, record, did: DID)
   blocks = []
   add_block = lambda do |data|
     encoded = CBOR.encode(data)
@@ -218,56 +219,102 @@ def write_car(path, record)
   end
   record_cid = add_block.call(record)
   tree_cid = add_block.call({ "e" => [{ "p" => 0, "k" => "app.bsky.feed.post/car-post", "v" => record_cid }] })
-  commit_cid = add_block.call({ "did" => DID, "data" => tree_cid })
+  commit_cid = add_block.call({ "did" => did, "data" => tree_cid })
   header = CBOR.encode({ "version" => 1, "roots" => [commit_cid] })
   File.binwrite(path, varint(header.bytesize) + header + blocks.map { |block| varint(block.bytesize) + block }.join)
 end
 
-Dir.mktmpdir("bsky-car-bootstrap-test") do |directory|
+def run_car_script(*args)
+  Open3.capture3(RbConfig.ruby, File.expand_path("../bsky_car_to_obsidian.rb", __dir__), *args)
+end
+
+Dir.mktmpdir("bsky-car-import-test") do |directory|
+  out = File.join(directory, "out")
+  vault = File.join(directory, "vault")
+  car = File.join(directory, "repo.car")
   config = {
-    "bluesky" => { "did" => DID },
-    "extract" => { "out_dir" => File.join(directory, "out"), "car_path" => File.join(directory, "repo.car") },
+    "bluesky" => { "did" => DID, "out_dir" => out, "car_path" => car },
+    "obsidian" => { "vault_path" => vault, "timezone" => "UTC", "posts" => { "days" => 1 } }
+  }
+  config_path = File.join(directory, "config.yml")
+  File.write(config_path, YAML.dump(config))
+  write_car(car, feed_entry("car-post", text: "CAR 本文", date: "2020-01-01T00:00:00Z")["post"]["record"])
+  FileUtils.mkdir_p(out)
+  posts_path = File.join(out, "posts.jsonl")
+  old = archive_item(feed_entry("old", text: "API 本文", date: "2020-01-02T00:00:00Z"))
+  BskyFeed.write_archive(posts_path, [old])
+  seed_path = File.join(out, "records.jsonl")
+  seed_data = JSON.generate(archive_item(feed_entry("seed", date: "2019-01-01T00:00:00Z"))) + "\n"
+  File.write(seed_path, seed_data)
+  note_path = File.join(vault, "Daily", "2020-01-01.md")
+  FileUtils.mkdir_p(File.dirname(note_path))
+  File.write(note_path, "# 手書き\n")
+
+  _stdout, stderr, status = run_car_script("--config", config_path)
+  assert_equal(true, status.success?, "CAR can be imported using a configured DID and path: #{stderr}")
+  posts = BskyFeed.read_posts(posts_path, DID)
+  assert_equal(%w[car-post old], posts.map { |post| post["rkey"] }, "CAR posts merge with existing history")
+  assert_equal("# 手書き\n", File.read(note_path), "configured days limits note updates, not the archive")
+  assert_equal(seed_data, File.read(seed_path), "import does not overwrite the legacy extraction")
+
+  _stdout, stderr, status = run_car_script("--config", config_path, "--all", car)
+  assert_equal(true, status.success?, "--all and an explicit CAR path work: #{stderr}")
+  note = File.read(note_path)
+  assert_equal(true, note.include?("# 手書き") && note.include?("CAR 本文"), "--all writes older posts and preserves handwritten content")
+  saved = File.binread(posts_path)
+  _stdout, stderr, status = run_car_script("--config", config_path, "--all", car)
+  assert_equal(true, status.success?, "repeat CAR import succeeds: #{stderr}")
+  assert_equal(saved, File.binread(posts_path), "repeat import is idempotent")
+  assert_equal(note, File.read(note_path), "repeat import leaves notes unchanged")
+
+  bad_car = File.join(directory, "bad.car")
+  File.write(bad_car, "broken CAR")
+  other_car = File.join(directory, "other.car")
+  write_car(other_car, feed_entry("car-post", text: "other")["post"]["record"], did: OTHER_DID)
+  [bad_car, other_car, File.join(directory, "missing.car")].each do |path|
+    _stdout, _stderr, status = run_car_script("--config", config_path, path)
+    assert_equal(false, status.success?, "invalid or foreign CAR is rejected")
+    assert_equal(saved, File.binread(posts_path), "failed CAR import preserves history")
+    assert_equal(note, File.read(note_path), "failed CAR import preserves notes")
+    assert_equal(seed_data, File.read(seed_path), "failed CAR import preserves old extraction")
+  end
+  _stdout, _stderr, status = run_car_script("--config", config_path, "--all", "--days", "1", car)
+  assert_equal(false, status.success?, "--all and --days conflict")
+  assert_equal(saved, File.binread(posts_path), "invalid options leave history intact")
+end
+
+Dir.mktmpdir("bsky-car-legacy-seed-test") do |directory|
+  out = File.join(directory, "out")
+  FileUtils.mkdir_p(out)
+  car = File.join(directory, "repo.car")
+  write_car(car, feed_entry("car-post", text: "CAR 本文")["post"]["record"])
+  legacy = archive_item(feed_entry("legacy", date: "2020-01-01T00:00:00Z"))
+  File.write(File.join(out, "records.jsonl"), JSON.generate(legacy.reject { |key, _| key == "uri" }) + "\n")
+  config = {
+    "bluesky" => { "did" => DID, "out_dir" => out, "car_path" => car },
     "obsidian" => { "vault_path" => File.join(directory, "vault") }
   }
   config_path = File.join(directory, "config.yml")
   File.write(config_path, YAML.dump(config))
-  write_car(config["extract"]["car_path"], feed_entry("car-post", text: "CAR 本文")["post"]["record"])
+  _stdout, stderr, status = run_car_script("--config", config_path)
+  assert_equal(true, status.success?, "CAR import supports existing legacy extraction: #{stderr}")
+  posts = BskyFeed.read_posts(File.join(out, "posts.jsonl"), DID)
+  assert_equal(%w[car-post legacy], posts.map { |post| post["rkey"] }.sort, "legacy records are retained when no posts archive exists")
+end
+
+Dir.mktmpdir("bsky-api-without-car-test") do |directory|
+  out = File.join(directory, "out")
+  config = {
+    "bluesky" => { "did" => DID, "out_dir" => out, "car_path" => File.join(directory, "missing.car") },
+    "obsidian" => { "vault_path" => File.join(directory, "vault") }
+  }
+  config_path = File.join(directory, "config.yml")
+  File.write(config_path, YAML.dump(config))
   quiet do
     BskyToObsidian.main(["--config", config_path], client: fake_client({ nil => { "feed" => [feed_entry("new")] } }))
   end
-  posts = BskyFeed.read_posts(File.join(config["extract"]["out_dir"], "posts.jsonl"), DID)
-  assert_equal(%w[car-post new], posts.map { |post| post["rkey"] }, "first run extracts an existing CAR and merges new API posts")
-
-  # Simulate only the download; extraction and merging still use the real commands.
-  original_runner = BskyToObsidian.method(:run_command)
-  downloads = 0
-  BskyToObsidian.define_singleton_method(:run_command) do |script, *args|
-    if script == "download_car.rb"
-      downloads += 1
-      write_car(config["extract"]["car_path"], feed_entry("car-post", text: "更新された CAR 本文")["post"]["record"])
-    else
-      original_runner.call(script, *args)
-    end
-  end
-  begin
-    quiet do
-      BskyToObsidian.main(["--config", config_path, "--refresh-car"], client: fake_client({ nil => { "feed" => [] } }))
-    end
-    posts = BskyFeed.read_posts(File.join(config["extract"]["out_dir"], "posts.jsonl"), DID)
-    assert_equal(1, downloads, "explicit CAR refresh downloads again")
-    assert_equal(%w[car-post new], posts.map { |post| post["rkey"] }, "CAR refresh retains posts absent from the fresh CAR")
-    assert_equal("更新された CAR 本文", posts.first["record"]["text"], "CAR refresh updates existing records")
-
-    config["extract"] = { "out_dir" => File.join(directory, "fresh"), "car_path" => File.join(directory, "fresh.car") }
-    File.write(config_path, YAML.dump(config))
-    quiet do
-      BskyToObsidian.main(["--config", config_path], client: fake_client({ nil => { "feed" => [] } }))
-    end
-    assert_equal(2, downloads, "a fresh installation downloads its initial CAR")
-    assert_equal(1, BskyFeed.read_posts(File.join(config["extract"]["out_dir"], "posts.jsonl"), DID).size, "downloaded CAR seeds the archive")
-  ensure
-    BskyToObsidian.define_singleton_method(:run_command, original_runner)
-  end
+  assert_equal(["new"], BskyFeed.read_posts(File.join(out, "posts.jsonl"), DID).map { |post| post["rkey"] }, "API works without downloading or extracting a CAR")
+  assert_equal(false, File.exist?(config["bluesky"]["car_path"]), "normal API sync does not create a CAR")
 end
 
 puts "bsky_to_obsidian_test: ok"

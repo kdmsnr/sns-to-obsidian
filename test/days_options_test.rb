@@ -48,6 +48,15 @@ Dir.mktmpdir("bsky-days-test-") do |dir|
   x_jsonl = x_posts.map { |post| JSON.generate(post) }.join("\n")
   File.write(File.join(x_archive, "posts.jsonl"), x_jsonl)
 
+  # Legacy paths must not silently fall back to a different history directory.
+  [{ "extract" => { "out_dir" => out_dir } }, { "bluesky" => { "extract" => { "out_dir" => out_dir } } }].each do |legacy|
+    config_path = File.join(dir, "legacy.yml")
+    File.write(config_path, YAML.dump(legacy))
+    _stdout, stderr, status = Open3.capture3(RbConfig.ruby, File.join(repo_root, "upsert_obsidian_daily_notes.rb"), "--config", config_path)
+    assert_equal(false, status.success?, "legacy extract settings are rejected")
+    assert_equal(true, stderr.include?("bluesky.out_dir"), "legacy settings report the migration target")
+  end
+
   ["bsky_to_obsidian.rb", "upsert_obsidian_daily_notes.rb", "x_to_obsidian.rb"].each do |script|
     x_script = script == "x_to_obsidian.rb"
     source = x_script ? "x" : "bsky"
@@ -71,7 +80,7 @@ Dir.mktmpdir("bsky-days-test-") do |dir|
       end
       config = {
         "x" => { "handle" => "self", "archive_dir" => x_archive },
-        "extract" => { "out_dir" => out_dir },
+        "bluesky" => { "out_dir" => out_dir },
         "obsidian" => {
           "vault_path" => vault,
           "timezone" => "Asia/Tokyo",

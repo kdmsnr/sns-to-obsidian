@@ -8,7 +8,12 @@ def load_config(path = DEFAULT_CONFIG_PATH)
     exit 1
   end
 
-  YAML.load_file(path) || {}
+  config = YAML.load_file(path) || {}
+  if config.key?("extract") || config.dig("bluesky", "extract")
+    raise ArgumentError, "move extract.car_path and extract.out_dir to bluesky.car_path and bluesky.out_dir"
+  end
+
+  config
 end
 
 def config_get(config, *keys, default: nil)

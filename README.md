@@ -1,7 +1,7 @@
 # sns-to-obsidian
 
 Bluesky の公開 API、X の RSS と公式アーカイブから自分の投稿を取り出し、Obsidian の Daily note に書き込むためのスクリプトです。
-Bluesky の過去分は初回に CAR ファイルから取り込み、以後は API で最新分を取得します。
+Bluesky の CAR ファイルからの取り込みと、API を使った投稿の取得は別々のコマンドで行います。
 Bluesky と X は別々のスクリプトで実行し、同じ Daily note 内の専用ブロックをそれぞれ更新します。
 
 Daily note には以下の形式で挿入します。
@@ -47,27 +47,27 @@ CAR ファイルは不要です。
 
 Bluesky のアカウントを `bluesky.handle`（または `bluesky.did`）に設定します。
 ログイン情報と RSS の URL は不要です。
-初回は CAR ファイルで過去分をまとめて取り込み、API を呼び出す回数を抑えます。
-
-既存の `out/records.jsonl` があれば再利用します。
-抽出結果がなければ CAR ファイルを抽出し、CAR ファイルもなければ自動でダウンロードします。
-
-CAR ファイルをあらかじめ用意する場合は、次のどちらかで取得します。
+過去分を CAR ファイルからまとめて取り込む場合は、次のどちらかで CAR ファイルを取得します。
 
 1. Bluesky のページで「*設定 > アカウント > 私のデータをエクスポートする > CARファイルをダウンロード*」を選び、ファイルをスクリプトと同じディレクトリに保存する
-2. 公開投稿であれば `download_car.rb` でダウンロードする
+2. 公開投稿であれば、次のコマンドでダウンロードする
 
-デフォルトの保存先は `repo.car` です。別の名前を使う場合は `extract.car_path` を変更してください。
+   ```sh
+   bundle exec ruby download_car.rb
+   ```
+
+ダウンロード先は `bluesky.car_path` で指定します。デフォルトは `repo.car` です。
 
 ## 設定
+
+以前の設定ファイルでトップレベルの `extract` に `car_path` と `out_dir` を置いている場合は、これらの項目を `bluesky` の直下に移動してください。
+値はそのまま使えます。
 
 例:
 
 ```yaml
 bluesky:
   handle: bsky.app
-
-extract:
   car_path: repo.car
   out_dir: out
 
@@ -94,20 +94,40 @@ obsidian:
 DID を使うと、ハンドルの変更後も同じアカウントを取得できます。
 自分への返信を含めて取り込み、他人への返信と他人の投稿のリポストは除外します。
 
-初回の履歴作成後は、公開 API から100件ずつ取得し、保存済みの通常投稿（リポストを除く）が現れたページで止めます。
+通常の取り込みでは公開 API から100件ずつ取得し、保存済みの通常投稿（リポストを除く）が現れたページで止めます。
 保存済みの投稿が見つからなければ、API が返す最終ページまで取得します。
-通常実行では CAR を再取得しません。
+`posts.jsonl` がまだなく、以前に抽出した `records.jsonl` がある場合は、初回の API 取得時にその履歴も取り込みます。
 
-### `extract.car_path`
+### Bluesky の CAR ファイル
 
-初回の履歴作成に使う CAR ファイルです。
-デフォルトは `repo.car` で、必要なファイルがなければ自動でダウンロードします。
-`--refresh-car` または `download_car.rb` で再取得する場合も、このパスに保存します。
+CAR ファイルから投稿を取り込む場合は、専用コマンドを使います。
 
-### `extract.out_dir`
+```sh
+bundle exec ruby bsky_car_to_obsidian.rb path/to/repo.car
+```
 
-CAR の抽出結果と Bluesky の投稿履歴の保存先です。
-CAR の抽出では `records.jsonl` と個別 JSON ファイルを書き出し、通常の取り込みでは `posts.jsonl` に履歴を蓄積します。
+パスを省略すると、`bluesky.car_path` のファイルを使います。
+投稿は保存済みの履歴とマージし、Daily note に反映します。
+`obsidian.posts.days` または `--days N` を指定している場合も、履歴には全投稿を保存します。
+設定の日数を無視して全期間を反映するには `--all` を指定します。
+
+```sh
+bundle exec ruby bsky_car_to_obsidian.rb --all path/to/repo.car
+```
+
+`bluesky.handle` を設定している場合は、アカウントの DID を確認するためネットワーク接続が必要です。
+`bluesky.did` を設定している場合、CAR の取り込みにネットワーク接続は不要です。
+
+### `bluesky.car_path`
+
+CAR 取り込みコマンドでパスを省略した場合に使うファイルです。
+デフォルトは `repo.car` です。
+`download_car.rb` の保存先にも使います。
+
+### `bluesky.out_dir`
+
+Bluesky の投稿履歴の保存先です。
+CAR および API から取り込んだ投稿を `posts.jsonl` に蓄積します。
 Daily note は `posts.jsonl` を優先し、なければ `records.jsonl` から生成します。
 投稿は AT URI（DID と投稿 ID を含む識別子）でマージし、再取得した投稿を更新します。
 今回取得しなかった投稿も保持するため、古い投稿の変更や削除は自動では反映しません。

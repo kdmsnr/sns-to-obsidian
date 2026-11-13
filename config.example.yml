@@ -1,8 +1,6 @@
 bluesky:
   # API と CAR の取得に使うアカウント。did で指定することもできます。
   handle: bsky.app
-
-extract:
   car_path: repo.car
   out_dir: out
 

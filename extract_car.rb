@@ -35,8 +35,8 @@ def parse_options
 
   config = load_config(options.config_path)
 
-  options.car_path = config_get(config, "extract", "car_path", default: "repo.car")
-  options.out_dir = config_get(config, "extract", "out_dir", default: "out")
+  options.car_path = config_get(config, "bluesky", "car_path", default: "repo.car")
+  options.out_dir = config_get(config, "bluesky", "out_dir", default: "out")
 
   unless File.exist?(options.car_path)
     warn "CAR file not found: #{options.car_path}"
@@ -287,12 +287,15 @@ def write_record_file(out_dir, item)
   File.write(path, JSON.pretty_generate(item) + "\n", encoding: "UTF-8")
 end
 
-def extract_records(options)
+def extract_records(options, expected_did: nil)
   header, blocks = read_car(options.car_path)
 
   commit_cid = roots_from_header(header).first
   commit = decode_block(blocks, commit_cid)
   repo_did = hash_get(commit, "did")
+  if expected_did && repo_did != expected_did
+    raise "archive belongs to another account: #{repo_did.inspect}"
+  end
   mst_root_cid = repo_root_from_commit(commit)
 
   record_cids_by_path = traverse_mst(blocks, mst_root_cid)
