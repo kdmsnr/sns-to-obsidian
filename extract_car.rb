@@ -36,7 +36,7 @@ def parse_options
   config = load_config(options.config_path)
 
   options.car_path = config_get(config, "bluesky", "car_path", default: "repo.car")
-  options.out_dir = config_get(config, "bluesky", "out_dir", default: "out")
+  options.out_dir = config_get(config, "bluesky", "archive_dir", default: "out")
 
   unless File.exist?(options.car_path)
     warn "CAR file not found: #{options.car_path}"

@@ -2,7 +2,7 @@ bluesky:
   # API と CAR の取得に使うアカウント。did で指定することもできます。
   handle: bsky.app
   car_path: repo.car
-  out_dir: out
+  archive_dir: out
 
 # x_to_obsidian.rb で使用します。Bluesky とは独立して実行できます。
 x:

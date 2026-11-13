@@ -10,7 +10,15 @@ def load_config(path = DEFAULT_CONFIG_PATH)
 
   config = YAML.load_file(path) || {}
   if config.key?("extract") || config.dig("bluesky", "extract")
-    raise ArgumentError, "move extract.car_path and extract.out_dir to bluesky.car_path and bluesky.out_dir"
+    raise ArgumentError, "move extract.car_path and extract.out_dir to bluesky.car_path and bluesky.archive_dir"
+  end
+  if config["bluesky"].is_a?(Hash) && config["bluesky"].key?("out_dir")
+    raise ArgumentError, "move bluesky.out_dir to bluesky.archive_dir"
+  end
+  %w[bluesky x].each do |service|
+    if config[service].is_a?(Hash) && config[service].key?("history_dir")
+      raise ArgumentError, "move #{service}.history_dir to #{service}.archive_dir"
+    end
   end
 
   config

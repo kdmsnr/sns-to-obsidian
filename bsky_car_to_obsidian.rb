@@ -30,7 +30,7 @@ module BskyCarToObsidian
     days = sync_days_config(config, override: options[:days])
     raise ArgumentError, "obsidian.vault_path is required" if config_get(config, "obsidian", "vault_path").to_s.strip.empty?
 
-    directory = config_get(config, "bluesky", "out_dir", default: "out")
+    directory = config_get(config, "bluesky", "archive_dir", default: "out")
     car_path = argv.first || config_get(config, "bluesky", "car_path", default: "repo.car")
     did = client.resolve_actor(bluesky_actor_config(config))
     FileUtils.mkdir_p(directory)

@@ -33,7 +33,7 @@ module BskyToObsidian
   end
 
   def sync(config, options, client: BskyFeed)
-    directory = config_get(config, "bluesky", "out_dir", default: "out")
+    directory = config_get(config, "bluesky", "archive_dir", default: "out")
     path = File.join(directory, "posts.jsonl")
     seed_path = File.join(directory, "records.jsonl")
     did = client.resolve_actor(bluesky_actor_config(config))
@@ -56,7 +56,7 @@ module BskyToObsidian
       raise ArgumentError, "obsidian.vault_path is required"
     end
 
-    directory = config_get(config, "bluesky", "out_dir", default: "out")
+    directory = config_get(config, "bluesky", "archive_dir", default: "out")
     FileUtils.mkdir_p(directory)
     File.open(File.join(directory, ".bsky-sync.lock"), "a") do |lock|
       lock.flock(File::LOCK_EX)

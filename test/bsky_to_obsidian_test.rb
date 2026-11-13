@@ -136,7 +136,7 @@ Dir.mktmpdir("bsky-to-obsidian-test") do |directory|
   vault = File.join(directory, "vault")
   FileUtils.mkdir_p([out, vault])
   config = {
-    "bluesky" => { "handle" => "self.example", "out_dir" => out, "car_path" => File.join(directory, "missing.car") },
+    "bluesky" => { "handle" => "self.example", "archive_dir" => out, "car_path" => File.join(directory, "missing.car") },
     "obsidian" => { "vault_path" => vault, "timezone" => "Asia/Tokyo", "daily" => { "path_format" => "%Y-%m-%d.md" },
                     "posts" => { "exclude_texts" => ["excluded"] } }
   }
@@ -233,7 +233,7 @@ Dir.mktmpdir("bsky-car-import-test") do |directory|
   vault = File.join(directory, "vault")
   car = File.join(directory, "repo.car")
   config = {
-    "bluesky" => { "did" => DID, "out_dir" => out, "car_path" => car },
+    "bluesky" => { "did" => DID, "archive_dir" => out, "car_path" => car },
     "obsidian" => { "vault_path" => vault, "timezone" => "UTC", "posts" => { "days" => 1 } }
   }
   config_path = File.join(directory, "config.yml")
@@ -291,7 +291,7 @@ Dir.mktmpdir("bsky-car-legacy-seed-test") do |directory|
   legacy = archive_item(feed_entry("legacy", date: "2020-01-01T00:00:00Z"))
   File.write(File.join(out, "records.jsonl"), JSON.generate(legacy.reject { |key, _| key == "uri" }) + "\n")
   config = {
-    "bluesky" => { "did" => DID, "out_dir" => out, "car_path" => car },
+    "bluesky" => { "did" => DID, "archive_dir" => out, "car_path" => car },
     "obsidian" => { "vault_path" => File.join(directory, "vault") }
   }
   config_path = File.join(directory, "config.yml")
@@ -305,7 +305,7 @@ end
 Dir.mktmpdir("bsky-api-without-car-test") do |directory|
   out = File.join(directory, "out")
   config = {
-    "bluesky" => { "did" => DID, "out_dir" => out, "car_path" => File.join(directory, "missing.car") },
+    "bluesky" => { "did" => DID, "archive_dir" => out, "car_path" => File.join(directory, "missing.car") },
     "obsidian" => { "vault_path" => File.join(directory, "vault") }
   }
   config_path = File.join(directory, "config.yml")

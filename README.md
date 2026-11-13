@@ -45,6 +45,62 @@ cp config.example.yml config.yml
 X だけを利用する場合は、`x` と `obsidian` の設定があれば実行できます。
 CAR ファイルは不要です。
 
+## 設定
+
+以前の設定ファイルに `bluesky.out_dir` がある場合は、`bluesky.archive_dir` に変更してください。
+さらに古い設定でトップレベルの `extract` に `car_path` と `out_dir` がある場合は、`bluesky.car_path` と `bluesky.archive_dir` に変更してください。
+値はそのまま使えます。
+
+例:
+
+```yaml
+bluesky:
+  # handle か did を指定します。両方ある場合は did を優先します。
+  handle: bsky.app
+  # did: did:plc:example
+  car_path: repo.car
+  archive_dir: out
+
+x:
+  handle: kdmsnr
+  # 別の RSS を使う場合だけ指定します。
+  # feed_url: https://example.com/feed.xml
+  archive_dir: x-archive
+
+obsidian:
+  vault_path: "/Users/user/Documents/obsidian"
+  timezone: Asia/Tokyo
+  daily:
+    path_format: "Daily/%Y/%Y-%m-%d.md"
+  posts:
+    # 省略すると全期間を反映します。
+    # days: 7
+    exclude_texts: []
+```
+
+## Bluesky
+
+### アカウントと公開 API からの取り込み
+
+`bluesky.handle` または `bluesky.did` に、公開 API と CAR ファイルの取得対象を指定します。
+両方指定した場合は `did` を優先します。
+DID を使うと、ハンドルの変更後も同じアカウントを取得できます。
+自分への返信を含めて取り込み、他人への返信と他人の投稿のリポストは除外します。
+
+通常の取り込みでは公開 API から100件ずつ取得し、保存済みの通常投稿（リポストを除く）が現れたページで止めます。
+保存済みの投稿が見つからなければ、API が返す最終ページまで取得します。
+`posts.jsonl` がまだなく、以前に抽出した `records.jsonl` がある場合は、初回の API 取得時にその履歴も取り込みます。
+
+通常の取得は次のコマンドで実行します。
+
+```sh
+bundle exec ruby bsky_to_obsidian.rb
+```
+
+`--config PATH` と `--days N` を指定できます。
+
+### CAR ファイルからの取り込み
+
 Bluesky のアカウントを `bluesky.handle`（または `bluesky.did`）に設定します。
 ログイン情報と RSS の URL は不要です。
 過去分を CAR ファイルからまとめて取り込む場合は、次のどちらかで CAR ファイルを取得します。
@@ -57,48 +113,6 @@ Bluesky のアカウントを `bluesky.handle`（または `bluesky.did`）に�
    ```
 
 ダウンロード先は `bluesky.car_path` で指定します。デフォルトは `repo.car` です。
-
-## 設定
-
-以前の設定ファイルでトップレベルの `extract` に `car_path` と `out_dir` を置いている場合は、これらの項目を `bluesky` の直下に移動してください。
-値はそのまま使えます。
-
-例:
-
-```yaml
-bluesky:
-  handle: bsky.app
-  car_path: repo.car
-  out_dir: out
-
-x:
-  handle: kdmsnr
-  archive_dir: x-archive
-
-obsidian:
-  vault_path: "/Users/user/Documents/obsidian"
-  timezone: Asia/Tokyo
-
-  daily:
-    path_format: "Daily/%Y/%Y-%m-%d.md"
-
-  posts:
-    exclude_texts:
-      - ""
-```
-
-### `bluesky.did` と `bluesky.handle`
-
-公開 API と CAR ファイルの取得対象です。
-どちらかの指定が必要で、両方指定した場合は `did` を優先します。
-DID を使うと、ハンドルの変更後も同じアカウントを取得できます。
-自分への返信を含めて取り込み、他人への返信と他人の投稿のリポストは除外します。
-
-通常の取り込みでは公開 API から100件ずつ取得し、保存済みの通常投稿（リポストを除く）が現れたページで止めます。
-保存済みの投稿が見つからなければ、API が返す最終ページまで取得します。
-`posts.jsonl` がまだなく、以前に抽出した `records.jsonl` がある場合は、初回の API 取得時にその履歴も取り込みます。
-
-### Bluesky の CAR ファイル
 
 CAR ファイルから投稿を取り込む場合は、専用コマンドを使います。
 
@@ -124,7 +138,7 @@ CAR 取り込みコマンドでパスを省略した場合に使うファイル�
 デフォルトは `repo.car` です。
 `download_car.rb` の保存先にも使います。
 
-### `bluesky.out_dir`
+### `bluesky.archive_dir`
 
 Bluesky の投稿履歴の保存先です。
 CAR および API から取り込んだ投稿を `posts.jsonl` に蓄積します。
@@ -134,11 +148,21 @@ Daily note は `posts.jsonl` を優先し、なければ `records.jsonl` から�
 このディレクトリは Git 管理の対象外なので、履歴を残すためにバックアップしてください。
 保存先を変更した場合は、必要に応じて `.gitignore` にも追加してください。
 
-### `x.handle`
+## X
 
-Daily note に書き込む X のアカウント名です。
+### アカウントと RSS からの取り込み
+
+`x.handle` に Daily note に書き込む X のアカウント名を指定します。
 RSS に他人の投稿のリポストが含まれていても、その投稿は Daily note には書き込みません。
 RSS には返信先を判定する情報がないため、自分の返信は取り込みます。
+
+通常の取得は次のコマンドで実行します。
+
+```sh
+bundle exec ruby x_to_obsidian.rb
+```
+
+`--config PATH` と `--days N` を指定できます。
 
 ### `x.feed_url`
 
@@ -155,7 +179,7 @@ bundle exec ruby x_to_obsidian.rb --feed-file path/to/feed.xml
 
 `--days N` を併用できます。
 
-### X の公式アーカイブ
+### 公式アーカイブからの取り込み
 
 公式アーカイブの取り込みには `x_archive_to_obsidian.rb` を使います。
 X からダウンロードした ZIP ファイルを指定してください。
@@ -208,6 +232,8 @@ RSS から消えた投稿も履歴には残りますが、取得前に配信範�
 旧形式の `feeds/<SHA-256>.xml` があれば、次回の取り込み時に未保存の投稿を履歴へ補完します。
 履歴と `latest.xml` の保存に成功した後で旧形式の原本を削除します。
 
+## Obsidian の設定
+
 ### `obsidian.vault_path`
 
 Obsidian vault のパスです。iCloud Drive 上の vault はパスにスペースが入るので、YAML では引用符で囲んでください。
@@ -251,26 +277,6 @@ obsidian:
 取得と履歴保存の範囲は制限しません。
 Bluesky の通常実行では保存済みの投稿に追いつくまで API を取得し、CAR の取り込みと X の RSS・公式アーカイブの履歴保存では入力全件を対象にします。
 コマンドラインの `--days N` を指定した場合は、設定ファイルの値より優先します。
-
-## 使い方
-
-投稿を取得し、Daily note に反映します。
-どちらも内部で `upsert_obsidian_daily_notes.rb` を呼び出すため、書き込みコマンドを別に実行する必要はありません。
-
-```sh
-# Bluesky
-bundle exec ruby bsky_to_obsidian.rb
-
-# X
-bundle exec ruby x_to_obsidian.rb
-```
-
-どちらも次のオプションを指定できます。
-
-| オプション | 動作 |
-| --- | --- |
-| `--config PATH` | 設定ファイルを指定（既定は `config.yml`） |
-| `--days N` | 今日を含む直近 N 日分だけ反映 |
 
 ## Obsidian への書き込み
 

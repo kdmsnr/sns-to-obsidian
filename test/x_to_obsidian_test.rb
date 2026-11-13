@@ -79,7 +79,7 @@ Dir.mktmpdir("x-to-obsidian-test") do |directory|
   vault = File.join(directory, "vault")
   config = {
     "x" => { "handle" => "@SELF", "archive_dir" => archive },
-    "bluesky" => { "out_dir" => File.join(directory, "out") },
+    "bluesky" => { "archive_dir" => File.join(directory, "out") },
     "obsidian" => {
       "vault_path" => vault,
       "timezone" => "Asia/Tokyo",
@@ -105,7 +105,7 @@ Dir.mktmpdir("x-to-obsidian-test") do |directory|
   assert_equal(true, status.success?, "second import succeeds: #{stderr}")
   assert_equal(note, File.read(path), "repeat imports leave notes unchanged")
 
-  out = config.fetch("bluesky").fetch("out_dir")
+  out = config.fetch("bluesky").fetch("archive_dir")
   FileUtils.mkdir_p(out)
   File.write(File.join(out, "records.jsonl"), JSON.generate({
     "path" => "app.bsky.feed.post/example", "collection" => "app.bsky.feed.post", "rkey" => "example",
