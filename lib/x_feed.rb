@@ -19,7 +19,7 @@ module XFeed
       uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 10, read_timeout: 30
     ) do |http|
       request = Net::HTTP::Get.new(uri)
-      request["User-Agent"] = "bsky-to-obsidian/1.0"
+      request["User-Agent"] = "sns-to-obsidian/1.0"
       http.request(request)
     end
 

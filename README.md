@@ -1,4 +1,4 @@
-# bsky-to-obsidian
+# sns-to-obsidian
 
 Bluesky の公開 API、X の RSS と公式アーカイブから自分の投稿を取り出し、Obsidian の Daily note に書き込むためのスクリプトです。
 Bluesky の過去分は初回に CAR ファイルから取り込み、以後は API で最新分を取得します。
