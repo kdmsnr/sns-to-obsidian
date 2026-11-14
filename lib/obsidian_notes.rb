@@ -137,16 +137,18 @@ module ObsidianNotes
     end
   end
 
-  def normalize_post_text(text)
-    text.gsub("\r\n", "\n").gsub("\r", "\n").gsub(/^([ \t]*)- \[ \] /, '\1- ').rstrip
+  def normalize_post_text(text, replace_todos: false)
+    text = text.gsub("\r\n", "\n").gsub("\r", "\n")
+    text = text.gsub(/^([ \t]*)([*-]) \[ \](?=[ \t]|$)/, '\1\2 □') if replace_todos
+    text.gsub(/^([ \t]*)- \[ \] /, '\1- ').rstrip
   end
 
-  def render(posts, source, timezone)
+  def render(posts, source, timezone, replace_todos: false)
     posts.sort_by { |post| [post.created_at, post.id.to_s] }.map do |post|
       time = local_time(post.created_at, timezone).strftime("%H:%M")
       heading = "`#{time}`"
       heading += " [#{LABELS.fetch(source)}](#{post.url})" if post.url
-      "#{heading}\n#{normalize_post_text(post.text)}"
+      "#{heading}\n#{normalize_post_text(post.text, replace_todos: replace_todos)}"
     end.join("\n\n")
   end
 
@@ -167,6 +169,10 @@ module ObsidianNotes
     path_format = config_get(config, "obsidian", "daily", "path_format", default: "Daily/%Y-%m-%d.md")
     excludes = Array(config_get(config, "obsidian", "posts", "exclude_texts", default: []))
       .map { |text| text.to_s.strip }.reject(&:empty?)
+    replace_todos = config_get(config, "obsidian", "posts", "replace_todos", default: false)
+    unless replace_todos == true || replace_todos == false
+      raise ArgumentError, "obsidian.posts.replace_todos must be true or false"
+    end
     grouped = posts_by_source.transform_values do |posts|
       filter_posts_by_days(posts, days, timezone, now: now).group_by do |post|
         local_time(post.created_at, timezone).to_date
@@ -187,7 +193,7 @@ module ObsidianNotes
         updated = if selected.empty?
                     ObsidianBlock.remove(updated, name: BLOCKS.fetch(source)).first
                   else
-                    ObsidianBlock.replace_or_append(updated, render(selected, source, timezone), name: BLOCKS.fetch(source))
+                    ObsidianBlock.replace_or_append(updated, render(selected, source, timezone, replace_todos: replace_todos), name: BLOCKS.fetch(source))
                   end
       end
       next if updated == note

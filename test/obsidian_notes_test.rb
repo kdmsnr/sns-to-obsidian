@@ -132,4 +132,62 @@ Dir.mktmpdir("obsidian-notes-test") do |directory|
   assert_equal(false, status.success?, "upsert reports that no histories are available")
 end
 
+Dir.mktmpdir("obsidian-replace-texts-test") do |directory|
+  vault = File.join(directory, "vault")
+  bsky_path = File.join(directory, "out", "posts.jsonl")
+  x_path = File.join(directory, "x-archive", "posts.jsonl")
+  timestamp = "2026-09-19T15:05:00Z"
+  bsky = {
+    "repo_did" => "did:plc:self", "collection" => "app.bsky.feed.post", "rkey" => "one",
+    "record" => { "$type" => "app.bsky.feed.post", "createdAt" => timestamp,
+                  "text" => "Bluesky 本文\n* [ ] 買い物\n- [ ] 読書" }
+  }
+  bsky_excluded = {
+    "repo_did" => "did:plc:self", "collection" => "app.bsky.feed.post", "rkey" => "two",
+    "record" => { "$type" => "app.bsky.feed.post", "createdAt" => timestamp,
+                  "text" => "- [ ] 除外する投稿" }
+  }
+  x = { "id" => "1", "author" => "self", "created_at" => timestamp,
+        "text" => "X 本文\n  * [ ] 散歩\n  - [ ] 映画\n文中の * [ ] はそのまま", "url" => "https://x.com/self/status/1" }
+  x_excluded = { "id" => "2", "author" => "self", "created_at" => timestamp,
+                 "text" => "- [ ] 除外する投稿", "url" => "https://x.com/self/status/2" }
+  write_jsonl(bsky_path, [bsky, bsky_excluded])
+  write_jsonl(x_path, [x, x_excluded])
+  originals = [bsky_path, x_path].to_h { |file| [file, File.binread(file)] }
+  config = {
+    "bluesky" => { "archive_dir" => File.dirname(bsky_path) },
+    "x" => { "handle" => "self", "archive_dir" => File.dirname(x_path) },
+    "obsidian" => { "vault_path" => vault, "timezone" => "Asia/Tokyo" }
+  }
+  config_path = File.join(directory, "config.yml")
+  path = File.join(vault, "Daily", "2026-09-20.md")
+  File.write(config_path, YAML.dump(config))
+  _stdout, stderr, status = run_script(directory, "upsert_obsidian_daily_notes.rb", "--config", config_path)
+  assert_equal(true, status.success?, "default rendering succeeds: #{stderr}")
+  note = File.read(path)
+  assert_equal(true, note.include?("Bluesky 本文\n* [ ] 買い物\n- 読書"), "without replacements the previous checkbox normalization is preserved")
+  assert_equal(true, note.include?("X 本文\n  * [ ] 散歩\n  - 映画\n文中の * [ ] はそのまま"), "default rendering is preserved for X")
+
+  config["obsidian"]["posts"] = {
+    "replace_todos" => true,
+    "exclude_texts" => ["- [ ] 除外する投稿", "□"]
+  }
+  File.write(config_path, YAML.dump(config))
+  _stdout, stderr, status = run_script(directory, "upsert_obsidian_daily_notes.rb", "--config", config_path)
+  assert_equal(true, status.success?, "configured replacement succeeds: #{stderr}")
+  note = File.read(path)
+  assert_equal(true, note.include?("Bluesky 本文\n* □ 買い物\n- □ 読書"), "both checkbox markers are replaced while Bluesky text remains")
+  assert_equal(true, note.include?("X 本文\n  * □ 散歩\n  - □ 映画\n文中の * [ ] はそのまま"), "both checkbox markers are replaced while X text remains")
+  assert_equal(false, note.include?("除外する投稿"), "exclusion checks original text before replacement")
+  originals.each { |file, bytes| assert_equal(bytes, File.binread(file), "replacement does not change saved history") }
+
+  config["obsidian"]["posts"]["replace_todos"] = false
+  File.write(config_path, YAML.dump(config))
+  _stdout, stderr, status = run_script(directory, "upsert_obsidian_daily_notes.rb", "--config", config_path)
+  assert_equal(true, status.success?, "explicitly disabling replacements succeeds: #{stderr}")
+  note = File.read(path)
+  assert_equal(true, note.include?("Bluesky 本文\n* [ ] 買い物\n- 読書"), "false restores previous checkbox normalization")
+  assert_equal(true, note.include?("X 本文\n  * [ ] 散歩\n  - 映画"), "false restores previous normalization for X")
+end
+
 puts "obsidian_notes_test: ok"

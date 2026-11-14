@@ -20,3 +20,5 @@ obsidian:
     # Bluesky と X の反映日数。省略時は全期間、指定時は今日を含む直近 N 日分。
     # days: 7
     exclude_texts: []
+    # true にすると、本文の行頭の未完了タスクを箇条書きの □ に置換します。
+    # replace_todos: true

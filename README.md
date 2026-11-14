@@ -76,6 +76,7 @@ obsidian:
     # 省略すると全期間を反映します。
     # days: 7
     exclude_texts: []
+    replace_todos: true
 ```
 
 ## Bluesky
@@ -259,6 +260,21 @@ Daily/2026/2026-05-15.md
 本文に含まれていたら Obsidian に書き込まない文字列です。
 Bluesky と X の両方に適用します。
 Bluesky と X の履歴ファイルには、除外した投稿も残します。
+
+### `obsidian.posts.replace_todos`
+
+`true` を指定すると、Daily note に書き込む本文で、行頭の `* [ ]` と `- [ ]` をそれぞれ `* □` と `- □` に置き換えます。
+Bluesky と X の両方に適用します。
+
+```yaml
+obsidian:
+  posts:
+    replace_todos: true
+```
+
+`exclude_texts` の判定は置換前の本文に対して行います。
+置換は Daily note にのみ反映し、履歴ファイルの本文は変更しません。
+`false` を指定するか設定を省略した場合は、従来どおりの形式で書き込みます。
 
 ### `obsidian.posts.days`
 
